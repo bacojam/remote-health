@@ -1,0 +1,86 @@
+name: Package release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: Test and package VSIX
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out tag
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Validate tag and package version
+        shell: bash
+        run: |
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tags must use the form vMAJOR.MINOR.PATCH."
+            exit 1
+          fi
+
+          package_version="$(node -p "require('./package.json').version")"
+          if [[ "v${package_version}" != "$GITHUB_REF_NAME" ]]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version ${package_version}."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: xvfb-run -a npm test
+
+      - name: Package extension
+        run: npm run package:vsix
+
+      - name: Locate VSIX
+        id: vsix
+        shell: bash
+        run: |
+          expected="remote-health-${GITHUB_REF_NAME#v}.vsix"
+          if [[ ! -f "$expected" ]]; then
+            echo "::error::Expected package $expected was not created."
+            exit 1
+          fi
+          echo "path=$expected" >> "$GITHUB_OUTPUT"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: remote-health-${{ github.ref_name }}
+          path: ${{ steps.vsix.outputs.path }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VSIX_PATH: ${{ steps.vsix.outputs.path }}
+        shell: bash
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$VSIX_PATH" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$VSIX_PATH" \
+              --verify-tag \
+              --generate-notes \
+              --title "Remote Health $GITHUB_REF_NAME"
+          fi
