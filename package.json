@@ -9,6 +9,9 @@
   "categories": [
     "Other"
   ],
+  "extensionKind": [
+    "workspace"
+  ],
   "activationEvents": [
     "onStartupFinished",
     "onCommand:remote-health.refresh"

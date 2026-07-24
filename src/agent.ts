@@ -1,5 +1,6 @@
 import * as http from 'node:http';
 import { promises as fs, readFileSync, rmSync } from 'node:fs';
+import { timingSafeEqual } from 'node:crypto';
 import { MetricsCollector } from './collector';
 import { protocolVersion } from './protocol';
 
@@ -16,7 +17,7 @@ let collection: Promise<unknown> | undefined;
 
 const server = http.createServer(async (request, response) => {
 	if (request.method !== 'GET' || request.url !== '/v1/snapshot'
-		|| request.headers.authorization !== `Bearer ${token}`) {
+		|| !tokensEqual(request.headers.authorization ?? '', `Bearer ${token}`)) {
 		response.writeHead(404).end();
 		return;
 	}
@@ -66,3 +67,9 @@ const close = () => server.close(() => {
 });
 process.on('disconnect', close);
 process.on('SIGTERM', close);
+
+function tokensEqual(left: string, right: string): boolean {
+	const leftBytes = Buffer.from(left);
+	const rightBytes = Buffer.from(right);
+	return leftBytes.length === rightBytes.length && timingSafeEqual(leftBytes, rightBytes);
+}

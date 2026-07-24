@@ -15,7 +15,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 	status.show();
 
 	const initialConfiguration = readConfiguration();
-	const externalAgent = initialConfiguration.agent.socketPath && initialConfiguration.agent.tokenFilePath
+	const externalAgent = initialConfiguration.agent.socketPath || initialConfiguration.agent.tokenFilePath
 		? initialConfiguration.agent
 		: undefined;
 	agent = new AgentClient(context.asAbsolutePath('dist/agent.js'), externalAgent);

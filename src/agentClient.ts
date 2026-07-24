@@ -1,5 +1,5 @@
 import { ChildProcess, fork } from 'node:child_process';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import * as http from 'node:http';
 import { promises as fs } from 'node:fs';
 import { AgentReadyMessage, HealthSnapshot, protocolVersion } from './protocol';
@@ -17,6 +17,9 @@ export class AgentClient {
 	async start(): Promise<void> {
 		if (this.child) { return; }
 		if (this.external) {
+			if (!this.external.socketPath || !this.external.tokenFilePath) {
+				throw new Error('Both host-agent socketPath and tokenFilePath must be configured');
+			}
 			this.token = (await fs.readFile(this.external.tokenFilePath, 'utf8')).trim();
 			if (!this.token) { throw new Error('The host-agent token file is empty'); }
 			await this.collect();
@@ -98,12 +101,4 @@ function isReadyMessage(value: unknown): value is AgentReadyMessage {
 		&& (value as Partial<AgentReadyMessage>).type === 'ready'
 		&& typeof (value as Partial<AgentReadyMessage>).port === 'number'
 		&& typeof (value as Partial<AgentReadyMessage>).protocolVersion === 'number';
-}
-
-// Kept local so secret comparisons remain constant-time when the client later
-// accepts externally supplied host-agent credentials.
-export function tokensEqual(left: string, right: string): boolean {
-	const a = Buffer.from(left);
-	const b = Buffer.from(right);
-	return a.length === b.length && timingSafeEqual(a, b);
 }
