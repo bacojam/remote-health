@@ -1,8 +1,12 @@
 import * as http from 'node:http';
+import { promises as fs, readFileSync, rmSync } from 'node:fs';
 import { MetricsCollector } from './collector';
 import { protocolVersion } from './protocol';
 
-const token = process.env.REMOTE_HEALTH_TOKEN;
+const token = process.env.REMOTE_HEALTH_TOKEN
+	?? (process.env.REMOTE_HEALTH_TOKEN_FILE
+		? readFileSync(process.env.REMOTE_HEALTH_TOKEN_FILE, 'utf8').trim()
+		: undefined);
 if (!token) {
 	throw new Error('REMOTE_HEALTH_TOKEN is required');
 }
@@ -31,13 +35,34 @@ const server = http.createServer(async (request, response) => {
 	}
 });
 
-server.listen(0, '127.0.0.1', () => {
+const socketPath = process.env.REMOTE_HEALTH_SOCKET;
+if (socketPath && process.platform === 'win32') {
+	throw new Error('Unix socket host-agent mode is not supported on Windows');
+}
+if (socketPath) {
+	rmSync(socketPath, { force: true });
+}
+
+const onListening = () => {
 	const address = server.address();
-	if (typeof address !== 'object' || !address) {
+	if (!address) {
 		throw new Error('Metrics agent failed to bind');
 	}
-	process.send?.({ type: 'ready', protocolVersion, port: address.port });
-});
+	if (typeof address === 'object') {
+		process.send?.({ type: 'ready', protocolVersion, port: address.port });
+	} else {
+		void fs.chmod(address, 0o600);
+		process.send?.({ type: 'ready', protocolVersion, socketPath: address });
+	}
+};
+if (socketPath) {
+	server.listen(socketPath, onListening);
+} else {
+	server.listen(0, '127.0.0.1', onListening);
+}
 
-process.on('disconnect', () => server.close());
-process.on('SIGTERM', () => server.close());
+const close = () => server.close(() => {
+	if (socketPath) { void fs.rm(socketPath, { force: true }); }
+});
+process.on('disconnect', close);
+process.on('SIGTERM', close);

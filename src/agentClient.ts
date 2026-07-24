@@ -1,17 +1,27 @@
 import { ChildProcess, fork } from 'node:child_process';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import * as http from 'node:http';
+import { promises as fs } from 'node:fs';
 import { AgentReadyMessage, HealthSnapshot, protocolVersion } from './protocol';
 
 export class AgentClient {
 	private child?: ChildProcess;
 	private port?: number;
-	private readonly token = randomBytes(32).toString('hex');
+	private token = randomBytes(32).toString('hex');
 
-	constructor(private readonly agentPath: string) {}
+	constructor(
+		private readonly agentPath: string,
+		private readonly external?: { socketPath: string; tokenFilePath: string },
+	) {}
 
 	async start(): Promise<void> {
 		if (this.child) { return; }
+		if (this.external) {
+			this.token = (await fs.readFile(this.external.tokenFilePath, 'utf8')).trim();
+			if (!this.token) { throw new Error('The host-agent token file is empty'); }
+			await this.collect();
+			return;
+		}
 		this.child = fork(this.agentPath, [], {
 			env: { ...process.env, REMOTE_HEALTH_TOKEN: this.token },
 			stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
@@ -38,11 +48,12 @@ export class AgentClient {
 	}
 
 	async collect(): Promise<HealthSnapshot> {
-		if (!this.port) { throw new Error('Metrics agent is not ready'); }
+		if (!this.port && !this.external) { throw new Error('Metrics agent is not ready'); }
 		return new Promise((resolve, reject) => {
 			const request = http.get({
-				host: '127.0.0.1',
-				port: this.port,
+				...(this.external
+					? { socketPath: this.external.socketPath }
+					: { host: '127.0.0.1', port: this.port }),
 				path: '/v1/snapshot',
 				headers: { authorization: `Bearer ${this.token}` },
 				timeout: 4000,

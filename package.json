@@ -79,6 +79,18 @@
           "default": 90,
           "minimum": 1,
           "maximum": 100
+        },
+        "remoteHealth.agent.socketPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Optional Unix socket for an external host agent mounted into this environment. Requires agent.tokenFilePath."
+        },
+        "remoteHealth.agent.tokenFilePath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Path to the mounted file containing the external agent token. The token is never stored in VS Code settings."
         }
       }
     }

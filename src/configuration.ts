@@ -7,6 +7,10 @@ export interface RemoteHealthConfiguration {
 	flash: boolean;
 	consecutiveSamples: number;
 	thresholds: Thresholds;
+	agent: {
+		socketPath: string;
+		tokenFilePath: string;
+	};
 }
 
 export function readConfiguration(): RemoteHealthConfiguration {
@@ -16,6 +20,10 @@ export function readConfiguration(): RemoteHealthConfiguration {
 		displayMode: configuration.get('displayMode', 'compact'),
 		flash: configuration.get('alerts.flash', true),
 		consecutiveSamples: configuration.get('alerts.consecutiveSamples', 3),
+		agent: {
+			socketPath: configuration.get('agent.socketPath', ''),
+			tokenFilePath: configuration.get('agent.tokenFilePath', ''),
+		},
 		thresholds: {
 			cpu: configuration.get('thresholds.cpuPercent', 85),
 			memory: configuration.get('thresholds.memoryPercent', 85),
