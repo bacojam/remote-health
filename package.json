@@ -1,7 +1,7 @@
 {
   "name": "remote-health",
   "displayName": "Remote Health",
-  "description": "Show remote machine metrics",
+  "description": "Lightweight health metrics for local, Remote-SSH, and dev container environments",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.125.0"
@@ -9,15 +9,79 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:remote-health.refresh"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "remote-health.helloWorld",
-        "title": "Hello World"
+        "command": "remote-health.refresh",
+        "title": "Remote Health: Refresh Now",
+        "icon": "$(refresh)"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Remote Health",
+      "properties": {
+        "remoteHealth.pollIntervalSeconds": {
+          "type": "number",
+          "default": 5,
+          "minimum": 2,
+          "maximum": 300,
+          "description": "Seconds between CPU, memory, and network samples."
+        },
+        "remoteHealth.displayMode": {
+          "type": "string",
+          "enum": ["icon", "compact", "detailed"],
+          "default": "compact",
+          "description": "Amount of information shown in the status bar."
+        },
+        "remoteHealth.alerts.flash": {
+          "type": "boolean",
+          "default": true,
+          "description": "Alternate the status bar warning color while a metric is unhealthy."
+        },
+        "remoteHealth.alerts.consecutiveSamples": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 12,
+          "description": "Consecutive unhealthy samples required before alerting (battery alerts immediately)."
+        },
+        "remoteHealth.thresholds.cpuPercent": {
+          "type": "number",
+          "default": 85,
+          "minimum": 1,
+          "maximum": 100
+        },
+        "remoteHealth.thresholds.memoryPercent": {
+          "type": "number",
+          "default": 85,
+          "minimum": 1,
+          "maximum": 100
+        },
+        "remoteHealth.thresholds.batteryPercent": {
+          "type": "number",
+          "default": 25,
+          "minimum": 0,
+          "maximum": 100
+        },
+        "remoteHealth.thresholds.temperatureCelsius": {
+          "type": "number",
+          "default": 85,
+          "minimum": 1,
+          "maximum": 150
+        },
+        "remoteHealth.thresholds.diskPercent": {
+          "type": "number",
+          "default": 90,
+          "minimum": 1,
+          "maximum": 100
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
