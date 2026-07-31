@@ -114,27 +114,29 @@ function statusText(snapshot: HealthSnapshot, mode: RemoteHealthConfiguration['d
 
 function snapshotTooltip(snapshot: HealthSnapshot, alerts: HealthAlert[]): vscode.MarkdownString {
 	const tooltip = new vscode.MarkdownString(undefined, true);
+	tooltip.supportHtml = true;
 	tooltip.appendMarkdown(`### Remote Health${alerts.length ? ' — warning' : ''}\n\n`);
-	tooltip.appendMarkdown('| Metric | Value |\n|---|---:|\n');
-	tooltip.appendMarkdown(`| CPU | ${snapshot.cpu.value.toFixed(1)}% |\n`);
-	tooltip.appendMarkdown(`| Memory | ${snapshot.memory.value.toFixed(1)}% (${formatBytes(snapshot.memory.usedBytes)} / ${formatBytes(snapshot.memory.totalBytes)}) |\n`);
+	tooltip.appendMarkdown('<table>\n<thead><tr><th align="left">&nbsp;Metric&nbsp;</th><th align="right">&nbsp;Value&nbsp;</th></tr></thead>\n<tbody>\n');
+	tooltip.appendMarkdown(metricRow('CPU', `${snapshot.cpu.value.toFixed(1)}%`));
+	tooltip.appendMarkdown(metricRow('Memory', `${snapshot.memory.value.toFixed(1)}% (${formatBytes(snapshot.memory.usedBytes)} / ${formatBytes(snapshot.memory.totalBytes)})`));
 	if (snapshot.battery) {
-		tooltip.appendMarkdown(`| Battery | ${snapshot.battery.value.toFixed(0)}%${snapshot.battery.charging ? ' (charging)' : ''} |\n`);
+		tooltip.appendMarkdown(metricRow('Battery', `${snapshot.battery.value.toFixed(0)}%${snapshot.battery.charging ? ' (charging)' : ''}`));
 	}
 	if (snapshot.temperature) {
-		tooltip.appendMarkdown(`| Temperature | ${snapshot.temperature.value.toFixed(1)}°C |\n`);
+		tooltip.appendMarkdown(metricRow('Temperature', `${snapshot.temperature.value.toFixed(1)}°C`));
 	}
 	if (snapshot.network) {
-		tooltip.appendMarkdown(`| Network | ↓ ${formatBytes(snapshot.network.receivedPerSecond)}/s · ↑ ${formatBytes(snapshot.network.sentPerSecond)}/s |\n`);
+		tooltip.appendMarkdown(metricRow('Network', `↓ ${formatBytes(snapshot.network.receivedPerSecond)}/s · ↑ ${formatBytes(snapshot.network.sentPerSecond)}/s`));
 	}
 	if (snapshot.disk) {
-		tooltip.appendMarkdown(`| Root disk | ${snapshot.disk.value.toFixed(1)}% (${formatBytes(snapshot.disk.usedBytes)} / ${formatBytes(snapshot.disk.totalBytes)}) |\n`);
+		tooltip.appendMarkdown(metricRow('Root disk', `${snapshot.disk.value.toFixed(1)}% (${formatBytes(snapshot.disk.usedBytes)} / ${formatBytes(snapshot.disk.totalBytes)})`));
 	}
 	if (snapshot.loadAverage) {
-		tooltip.appendMarkdown(`| Load average | ${snapshot.loadAverage.map(value => value.toFixed(2)).join(' · ')} |\n`);
+		tooltip.appendMarkdown(metricRow('Load average', snapshot.loadAverage.map(value => value.toFixed(2)).join(' · ')));
 	}
-	tooltip.appendMarkdown(`| Uptime | ${formatDuration(snapshot.uptimeSeconds)} |\n\n`);
-	tooltip.appendMarkdown(`**Source:** ${escapeMarkdown(snapshot.identity.hostname)} · ${snapshot.identity.platform}/${snapshot.identity.architecture} · **${snapshot.identity.scope} scope**\n\n`);
+	tooltip.appendMarkdown(metricRow('Uptime', formatDuration(snapshot.uptimeSeconds)));
+	tooltip.appendMarkdown('</tbody>\n</table>\n\n');
+	tooltip.appendMarkdown(`**Source:** ${wrapHtml(snapshot.identity.hostname)} · ${wrapHtml(`${snapshot.identity.platform}/${snapshot.identity.architecture}`)} · **${escapeMarkdown(snapshot.identity.scope)} scope**\n\n`);
 	if (snapshot.identity.scope === 'container') {
 		tooltip.appendMarkdown('_These are the resources visible to the dev container; physical host sensors require an explicit host-agent bridge._\n\n');
 	}
@@ -143,6 +145,23 @@ function snapshotTooltip(snapshot: HealthSnapshot, alerts: HealthAlert[]): vscod
 	}
 	tooltip.appendMarkdown(`Updated ${escapeMarkdown(new Date(snapshot.timestamp).toLocaleTimeString())} · collection ${snapshot.collectionDurationMs.toFixed(1)} ms\n\n_Click to refresh._`);
 	return tooltip;
+}
+
+function metricRow(label: string, value: string): string {
+	return `<tr><td>&nbsp;${escapeHtml(label)}&nbsp;</td><td align="right">&nbsp;${wrapHtml(value)}&nbsp;</td></tr>\n`;
+}
+
+function wrapHtml(value: string): string {
+	return escapeHtml(value).replace(/([/\\._:@-])/g, '$1<wbr>');
+}
+
+function escapeHtml(value: string): string {
+	return value
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&#39;');
 }
 
 function accessibilityLabel(snapshot: HealthSnapshot, alerts: HealthAlert[]): string {
