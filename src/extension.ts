@@ -115,12 +115,15 @@ function statusText(snapshot: HealthSnapshot, mode: RemoteHealthConfiguration['d
 function snapshotTooltip(snapshot: HealthSnapshot, alerts: HealthAlert[]): vscode.MarkdownString {
 	const tooltip = new vscode.MarkdownString(undefined, true);
 	tooltip.supportHtml = true;
-	tooltip.appendMarkdown(`### Remote Health${alerts.length ? ' — warning' : ''}\n\n`);
-	tooltip.appendMarkdown('<table>\n<thead><tr><th align="left">&nbsp;Metric&nbsp;</th><th align="right">&nbsp;Value&nbsp;</th></tr></thead>\n<tbody>\n');
-	tooltip.appendMarkdown(metricRow('CPU', `${snapshot.cpu.value.toFixed(1)}%`));
-	tooltip.appendMarkdown(metricRow('Memory', `${snapshot.memory.value.toFixed(1)}% (${formatBytes(snapshot.memory.usedBytes)} / ${formatBytes(snapshot.memory.totalBytes)})`));
+	const status = alerts.length ? '$(warning) Attention' : '$(pulse) Healthy';
+	tooltip.appendMarkdown(`<table>\n<tr><td><strong>Remote Health</strong><br><small>${escapeHtml(snapshot.identity.scope)} scope</small></td><td align="right">${status}</td></tr>\n</table>\n\n`);
+	tooltip.appendMarkdown('---\n\n**Usage**\n\n<table>\n<tbody>\n');
+	tooltip.appendMarkdown(metricRow('CPU', `${snapshot.cpu.value.toFixed(1)}%`, 'Processor utilization'));
+	tooltip.appendMarkdown(metricRow('Memory', `${snapshot.memory.value.toFixed(1)}%`, `${formatBytes(snapshot.memory.usedBytes)} / ${formatBytes(snapshot.memory.totalBytes)} used`));
+	tooltip.appendMarkdown('</tbody>\n</table>\n\n');
+	tooltip.appendMarkdown('**System details**\n\n<table>\n<tbody>\n');
 	if (snapshot.battery) {
-		tooltip.appendMarkdown(metricRow('Battery', `${snapshot.battery.value.toFixed(0)}%${snapshot.battery.charging ? ' (charging)' : ''}`));
+		tooltip.appendMarkdown(metricRow('Battery', `${snapshot.battery.value.toFixed(0)}%`, snapshot.battery.charging ? 'Charging' : 'Discharging'));
 	}
 	if (snapshot.temperature) {
 		tooltip.appendMarkdown(metricRow('Temperature', `${snapshot.temperature.value.toFixed(1)}°C`));
@@ -136,19 +139,20 @@ function snapshotTooltip(snapshot: HealthSnapshot, alerts: HealthAlert[]): vscod
 	}
 	tooltip.appendMarkdown(metricRow('Uptime', formatDuration(snapshot.uptimeSeconds)));
 	tooltip.appendMarkdown('</tbody>\n</table>\n\n');
-	tooltip.appendMarkdown(`**Source:** ${wrapHtml(snapshot.identity.hostname)} · ${wrapHtml(`${snapshot.identity.platform}/${snapshot.identity.architecture}`)} · **${escapeMarkdown(snapshot.identity.scope)} scope**\n\n`);
+	tooltip.appendMarkdown(`**Source**<br><small>${wrapHtml(snapshot.identity.hostname)} · ${wrapHtml(`${snapshot.identity.platform}/${snapshot.identity.architecture}`)}</small>\n\n`);
 	if (snapshot.identity.scope === 'container') {
 		tooltip.appendMarkdown('_These are the resources visible to the dev container; physical host sensors require an explicit host-agent bridge._\n\n');
 	}
 	if (alerts.length) {
-		tooltip.appendMarkdown(`**Unhealthy:** ${alerts.map(alert => `${alert.label} ${alert.value.toFixed(0)}${alert.unit}`).join(', ')}\n\n`);
+		tooltip.appendMarkdown(`**Attention**<br><small>${alerts.map(alert => `${escapeHtml(alert.label)} ${alert.value.toFixed(0)}${escapeHtml(alert.unit)}`).join(', ')}</small>\n\n`);
 	}
-	tooltip.appendMarkdown(`Updated ${escapeMarkdown(new Date(snapshot.timestamp).toLocaleTimeString())} · collection ${snapshot.collectionDurationMs.toFixed(1)} ms\n\n_Click to refresh._`);
+	tooltip.appendMarkdown(`<small>Updated ${escapeHtml(new Date(snapshot.timestamp).toLocaleTimeString())} · collection ${snapshot.collectionDurationMs.toFixed(1)} ms</small>\n\n_Click to refresh._`);
 	return tooltip;
 }
 
-function metricRow(label: string, value: string): string {
-	return `<tr><td>&nbsp;${escapeHtml(label)}&nbsp;</td><td align="right">&nbsp;${wrapHtml(value)}&nbsp;</td></tr>\n`;
+function metricRow(label: string, value: string, detail?: string): string {
+	const detailMarkup = detail ? `<br><small>${wrapHtml(detail)}</small>` : '';
+	return `<tr><td>&nbsp;<strong>${escapeHtml(label)}</strong>${detailMarkup}&nbsp;</td><td align="right">&nbsp;<strong>${wrapHtml(value)}</strong>&nbsp;</td></tr>\n`;
 }
 
 function wrapHtml(value: string): string {
@@ -182,10 +186,6 @@ function formatDuration(seconds: number): string {
 	if (seconds < 3600) { return `${Math.floor(seconds / 60)} min`; }
 	if (seconds < 86400) { return `${(seconds / 3600).toFixed(1)} h`; }
 	return `${(seconds / 86400).toFixed(1)} days`;
-}
-
-function escapeMarkdown(value: string): string {
-	return value.replace(/[\\`*_{}[\]()<>#+.!|~-]/g, '\\$&');
 }
 
 function messageOf(error: unknown): string {
